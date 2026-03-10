@@ -3,11 +3,14 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { Header } from "../components/layout/Header";
 import ImportForm from "../components/features/ImportForm";
 import { Toaster } from "../components/ui/Toast";
+import { useImport } from "../hooks/useImport";
 
 export default function ImportPage() {
   const navigate = useNavigate();
+  const { setStep } = useImport();
 
   const handleImportComplete = () => {
+    setStep("map");
     navigate("/map");
   };
 

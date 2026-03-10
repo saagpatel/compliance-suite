@@ -10,6 +10,7 @@ pub struct VaultDto {
     pub vault_id: String,
     pub name: String,
     pub root_path: String,
+    pub created_at: String,
     pub encryption_mode: String,
     pub schema_version: i64,
 }
@@ -20,6 +21,7 @@ impl From<storage::Vault> for VaultDto {
             vault_id: value.vault_id,
             name: value.name,
             root_path: value.root_path.to_string_lossy().to_string(),
+            created_at: value.created_at,
             encryption_mode: value.encryption_mode,
             schema_version: value.schema_version,
         }

@@ -4,8 +4,6 @@ use std::process::{Command, Output, Stdio};
 
 #[derive(Debug, Clone)]
 pub struct ShellCapabilities {
-    pub sqlite3: bool,
-    pub shasum: bool,
     pub zip: bool,
     pub unzip: bool,
     pub bash: bool,
@@ -14,33 +12,9 @@ pub struct ShellCapabilities {
 impl ShellCapabilities {
     pub fn detect() -> Self {
         Self {
-            sqlite3: tool_exists("sqlite3"),
-            shasum: tool_exists("shasum"),
             zip: tool_exists("zip"),
             unzip: tool_exists("unzip"),
             bash: tool_exists("bash"),
-        }
-    }
-
-    pub fn require_sqlite3(&self) -> CoreResult<()> {
-        if self.sqlite3 {
-            Ok(())
-        } else {
-            Err(CoreError::new(
-                CoreErrorCode::MissingCapability,
-                "required tool missing: sqlite3",
-            ))
-        }
-    }
-
-    pub fn require_shasum(&self) -> CoreResult<()> {
-        if self.shasum {
-            Ok(())
-        } else {
-            Err(CoreError::new(
-                CoreErrorCode::MissingCapability,
-                "required tool missing: shasum",
-            ))
         }
     }
 

@@ -1,0 +1,44 @@
+# compliance-suite command governance rules.
+# Keep unattended execution focused on repeatable local repo tasks.
+
+prefix_rule(
+    pattern = ["bash", ".codex", "scripts", "run_verify_commands.sh"],
+    decision = "allow",
+    justification = "Canonical repo verification is safe to run repeatedly.",
+    match = ["bash .codex/scripts/run_verify_commands.sh"],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "verify"],
+    decision = "allow",
+    justification = "Root verify command maps to the canonical repo verification runner.",
+    match = ["pnpm verify"],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "install"],
+    decision = "allow",
+    justification = "Dependency bootstrap is required for new worktrees and local environments.",
+    match = ["pnpm install --frozen-lockfile"],
+)
+
+prefix_rule(
+    pattern = ["cargo", "fetch"],
+    decision = "allow",
+    justification = "Rust dependency bootstrap is required for new worktrees and local environments.",
+    match = ["cargo fetch"],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "build"],
+    decision = "prompt",
+    justification = "Desktop packaging is higher-impact than routine verification and should stay intentional.",
+    match = ["pnpm build"],
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf"],
+    decision = "forbidden",
+    justification = "Use repo cleanup scripts instead of recursive force deletes.",
+    match = ["rm -rf /tmp/example"],
+)

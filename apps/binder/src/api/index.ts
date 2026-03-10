@@ -1,1 +1,1 @@
-// Thin wrapper over Tauri invoke will live here.
+export * from "./tauri";

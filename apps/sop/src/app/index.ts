@@ -1,1 +1,1 @@
-// App scaffold placeholder.
+export { default } from "../App";

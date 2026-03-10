@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERIFY_FILE="${1:-.codex/verify.commands}"
-if [[ ! -f "$VERIFY_FILE" ]]; then
-  echo "missing verify commands file: $VERIFY_FILE" >&2
-  exit 1
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+COMMANDS_FILE="${1:-$REPO_ROOT/.codex/verify.commands}"
+
+if [[ ! -f "$COMMANDS_FILE" ]]; then
+  echo "Missing $COMMANDS_FILE"
+  exit 2
 fi
 
-failed=0
-while IFS= read -r cmd || [[ -n "$cmd" ]]; do
-  [[ -z "$cmd" ]] && continue
-  [[ "$cmd" =~ ^# ]] && continue
-  echo ">>> $cmd"
-  if ! bash -lc "$cmd"; then
-    failed=1
-    break
-  fi
-done < "$VERIFY_FILE"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/.codex/actions/_artifact_env.sh"
 
-exit "$failed"
+cd "$REPO_ROOT"
+
+step=0
+
+while IFS= read -r cmd || [[ -n "$cmd" ]]; do
+  [[ -z "${cmd//[[:space:]]/}" ]] && continue
+  [[ "$cmd" =~ ^[[:space:]]*# ]] && continue
+
+  step=$((step + 1))
+  echo "[verify:$step] $cmd"
+  bash -lc "$cmd"
+done < "$COMMANDS_FILE"
+
+echo "[verify] all commands passed"

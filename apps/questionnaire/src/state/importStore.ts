@@ -11,7 +11,7 @@ interface ImportState {
   // UI state
   loading: boolean;
   error: string | null;
-  step: "import" | "map" | "review" | "export";
+  step: "import" | "map" | "answer-bank" | "review" | "export";
 
   // Actions
   setCurrentImport: (importData: QuestionnaireImportDto | null) => void;
@@ -19,7 +19,7 @@ interface ImportState {
   setColumnMap: (map: ColumnMapDto | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setStep: (step: "import" | "map" | "review" | "export") => void;
+  setStep: (step: "import" | "map" | "answer-bank" | "review" | "export") => void;
   reset: () => void;
 }
 

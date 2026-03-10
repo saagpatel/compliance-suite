@@ -24,7 +24,7 @@ fn migrations_are_idempotent_and_set_schema_version() -> CoreResult<()> {
     db.migrate()?;
 
     let v = db.schema_version()?;
-    assert_eq!(v, 6, "expected latest migration version");
+    assert_eq!(v, 11, "expected latest migration version");
 
     let tables =
         db.query_rows_tsv("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name ASC;")?;
@@ -38,6 +38,15 @@ fn migrations_are_idempotent_and_set_schema_version() -> CoreResult<()> {
         "license_install",
         "questionnaire_import",
         "questionnaire_import_column",
+        "questionnaire_import_row",
+        "questionnaire_review",
+        "binder_control",
+        "binder_control_evidence",
+        "sop_document",
+        "sop_version",
+        "sop_approval_request",
+        "sop_approval_step",
+        "sop_acknowledgment",
         "schema_version",
     ] {
         assert!(

@@ -3,11 +3,14 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { Header } from "../components/layout/Header";
 import ColumnMapTable from "../components/features/ColumnMapTable";
 import { Toaster } from "../components/ui/Toast";
+import { useImport } from "../hooks/useImport";
 
 export default function MapPage() {
   const navigate = useNavigate();
+  const { setStep } = useImport();
 
   const handleMappingComplete = () => {
+    setStep("answer-bank");
     navigate("/answer-bank");
   };
 

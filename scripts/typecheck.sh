@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Placeholder typecheck for the TS workspace. Once UI work starts, this should
-# run package-level typechecks (tsc) via pnpm -r.
-
-# Keep Rust compilation healthy as the primary early signal.
+# Keep Rust compilation healthy and typecheck the active UI lanes.
 cargo check --workspace
+pnpm --dir apps/questionnaire exec tsc --noEmit
+pnpm --dir apps/binder exec tsc --noEmit
+pnpm --dir apps/sop exec tsc --noEmit

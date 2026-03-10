@@ -1,1 +1,1 @@
-// Zustand stores will live here.
+export const SOP_LAST_VAULT_KEY = "sop:lastVaultPath";

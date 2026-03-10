@@ -2,26 +2,39 @@ name: quality-gates
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main, master]
   push:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
-  quality:
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: pnpm
 
-      - name: Install dependencies
-        run: npm ci || npm install
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Policy checks
         run: node scripts/ci/require-tests-and-docs.mjs
 
-      - name: Verify commands
+      - name: Run canonical verify contract
         run: bash .codex/scripts/run_verify_commands.sh

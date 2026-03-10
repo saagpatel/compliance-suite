@@ -7,8 +7,10 @@ pub mod prelude;
 
 pub mod answer_bank;
 pub mod audit;
+pub mod binder;
 pub mod domain;
 pub mod export;
 pub mod questionnaire;
+pub mod sop;
 pub mod storage;
 pub mod util;

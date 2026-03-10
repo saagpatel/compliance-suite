@@ -1,5 +1,9 @@
-# Replace these commands with your repo's canonical checks.
-# Keep order strict: fast static checks first, then behavioral, then docs drift.
-npm run lint
-npm run test
-npm run docs:check
+# codex-os-managed
+# Keep order strict: fast static checks first, then behavioral, then build/package validation.
+test -f .codex/codex-os.manifest.json
+test -f .codex/config.toml
+test -f docs/execution/control-plane.md
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build

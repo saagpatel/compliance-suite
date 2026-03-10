@@ -1,9 +1,13 @@
 use crate::error_map::{map_core_error, AppErrorDto};
-use core::storage::db::SqliteDb;
-use core::storage::{self, vault_db_path};
+use cs_core::storage::db::SqliteDb;
+use cs_core::storage::{self, vault_db_path};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tauri::State;
 
-#[derive(Debug, Clone)]
+use crate::app_state::AppState;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseStatusDto {
     pub installed: bool,
     pub valid: bool,
@@ -55,4 +59,28 @@ pub fn require_export_packs_feature(vault_root: &str) -> Result<(), AppErrorDto>
 
     storage::require_license_feature(&db, root, "EXPORT_PACKS").map_err(map_core_error)?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn check_license_status(state: State<'_, AppState>) -> Result<LicenseStatusDto, String> {
+    let vault_path = state
+        .get_vault_path()
+        .ok_or_else(|| "No vault open".to_string())?;
+
+    let status = license_status(&vault_path).map_err(|error| error.to_string())?;
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn install_license(
+    license_path: String,
+    state: State<'_, AppState>,
+) -> Result<LicenseStatusDto, String> {
+    let vault_path = state
+        .get_vault_path()
+        .ok_or_else(|| "No vault open".to_string())?;
+
+    let status = license_install(&vault_path, &license_path, &state.actor)
+        .map_err(|error| error.to_string())?;
+    Ok(status)
 }

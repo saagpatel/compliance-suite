@@ -1,4 +1,5 @@
 use super::ColumnProfile;
+use super::ParsedQuestionnaireRow;
 use crate::domain::errors::{CoreError, CoreErrorCode, CoreResult};
 use crate::domain::ids::Ulid;
 use std::collections::BTreeMap;
@@ -87,6 +88,48 @@ pub(crate) fn profile_columns(path: &Path) -> CoreResult<Vec<ColumnProfile>> {
 
     let _ = std::fs::remove_dir_all(&tmp);
     Ok(cols)
+}
+
+pub(crate) fn extract_rows(path: &Path) -> CoreResult<Vec<ParsedQuestionnaireRow>> {
+    let tmp = std::env::temp_dir().join(format!("cs_xlsx_{}_{}", std::process::id(), Ulid::new()?));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp)?;
+
+    crate::util::zip::unzip_to_dir(path, &tmp)?;
+
+    let shared = read_shared_strings(&tmp)?;
+    let sheet_path = pick_sheet_xml(&tmp)?;
+    let sheet_xml = crate::util::fs::read_to_string(&sheet_path)?;
+
+    let mut rows = Vec::new();
+    let mut pos = 0usize;
+    while let Some(row_start) = find_from(&sheet_xml, "<row", pos) {
+        let row_tag_end = find_from(&sheet_xml, ">", row_start)
+            .ok_or_else(|| CoreError::new(CoreErrorCode::ImportFailed, "invalid xlsx row tag"))?;
+        let row_tag = &sheet_xml[row_start..=row_tag_end];
+        let row_r = attr_value(row_tag, "r").unwrap_or_else(|| "0".to_string());
+        let row_num: i64 = row_r.parse().unwrap_or(0);
+
+        let row_end = find_from(&sheet_xml, "</row>", row_tag_end).ok_or_else(|| {
+            CoreError::new(CoreErrorCode::ImportFailed, "invalid xlsx row end tag")
+        })?;
+        let row_body = &sheet_xml[row_tag_end + 1..row_end];
+
+        let mut cells = BTreeMap::new();
+        collect_cells_in_row(row_body, &shared, &mut cells)?;
+
+        if row_num > 1 && !cells.is_empty() {
+            rows.push(ParsedQuestionnaireRow {
+                row_ordinal: row_num,
+                cells,
+            });
+        }
+
+        pos = row_end + "</row>".len();
+    }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+    Ok(rows)
 }
 
 fn pick_sheet_xml(unzipped_root: &Path) -> CoreResult<PathBuf> {
@@ -217,6 +260,57 @@ fn parse_cells_in_row(
             if entry.len() < SAMPLE_LIMIT {
                 entry.push(value.to_string());
             }
+        }
+
+        pos = if c_end > c_tag_end {
+            c_end + "</c>".len()
+        } else {
+            c_tag_end + 1
+        };
+    }
+    Ok(())
+}
+
+fn collect_cells_in_row(
+    row_body: &str,
+    shared: &[String],
+    cells: &mut BTreeMap<String, String>,
+) -> CoreResult<()> {
+    let mut pos = 0usize;
+    while let Some(c_start) = find_from(row_body, "<c", pos) {
+        let c_tag_end = find_from(row_body, ">", c_start)
+            .ok_or_else(|| CoreError::new(CoreErrorCode::ImportFailed, "invalid xlsx cell tag"))?;
+        let c_tag = &row_body[c_start..=c_tag_end];
+
+        let cell_ref = match attr_value(c_tag, "r") {
+            Some(v) => v,
+            None => {
+                pos = c_tag_end + 1;
+                continue;
+            }
+        };
+        let col_letters = cell_ref
+            .chars()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .collect::<String>()
+            .to_ascii_uppercase();
+        if col_letters.is_empty() {
+            pos = c_tag_end + 1;
+            continue;
+        }
+
+        let t = attr_value(c_tag, "t").unwrap_or_default();
+
+        let c_end = find_from(row_body, "</c>", c_tag_end).unwrap_or(c_tag_end);
+        let c_body = if c_end > c_tag_end {
+            &row_body[c_tag_end + 1..c_end]
+        } else {
+            ""
+        };
+
+        let value = read_cell_value(c_body, &t, shared);
+        if !value.trim().is_empty() {
+            cells.insert(col_letters, value);
         }
 
         pos = if c_end > c_tag_end {

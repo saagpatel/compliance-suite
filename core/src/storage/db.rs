@@ -1,5 +1,6 @@
 use crate::domain::errors::{CoreError, CoreErrorCode, CoreResult};
-use crate::util::shell;
+use rusqlite::types::ValueRef;
+use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -24,65 +25,37 @@ impl SqliteDb {
     }
 
     pub fn exec_batch(&self, sql: &str) -> CoreResult<()> {
-        let caps = shell::capabilities();
-        caps.require_sqlite3()?;
-
-        let cmd = format!("PRAGMA foreign_keys=ON; {}", sql);
-        let out = shell::run_capture(
-            "sqlite3",
-            &[
-                "-batch",
-                "-bail",
-                self.path.to_string_lossy().as_ref(),
-                cmd.as_str(),
-            ],
-        )?;
-
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(CoreError::new(
-                CoreErrorCode::DbError,
-                format!("sqlite3 exec failed: {}", stderr.trim()),
-            ));
-        }
+        let conn = self.open_connection()?;
+        conn.execute_batch(sql)
+            .map_err(|err| self.db_error("sqlite exec failed", err))?;
         Ok(())
     }
 
     pub fn query_rows_tsv(&self, sql: &str) -> CoreResult<Vec<Vec<String>>> {
-        // Use a tab separator to reduce collisions.
-        let caps = shell::capabilities();
-        caps.require_sqlite3()?;
-
-        let cmd = format!("PRAGMA foreign_keys=ON; {}", sql);
-        let out = shell::run_capture(
-            "sqlite3",
-            &[
-                "-batch",
-                "-bail",
-                "-noheader",
-                "-separator",
-                "\t",
-                self.path.to_string_lossy().as_ref(),
-                cmd.as_str(),
-            ],
-        )?;
-
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(CoreError::new(
-                CoreErrorCode::DbError,
-                format!("sqlite3 query failed: {}", stderr.trim()),
-            ));
-        }
-
-        let s = String::from_utf8_lossy(&out.stdout);
         let mut rows = Vec::new();
-        for line in s.lines() {
-            if line.trim().is_empty() {
-                continue;
+        let conn = self.open_connection()?;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|err| self.db_error("sqlite prepare failed", err))?;
+        let column_count = stmt.column_count();
+        let mut query = stmt
+            .query([])
+            .map_err(|err| self.db_error("sqlite query failed", err))?;
+
+        while let Some(row) = query
+            .next()
+            .map_err(|err| self.db_error("sqlite row fetch failed", err))?
+        {
+            let mut columns = Vec::with_capacity(column_count);
+            for index in 0..column_count {
+                let value = row
+                    .get_ref(index)
+                    .map_err(|err| self.db_error("sqlite value read failed", err))?;
+                columns.push(value_ref_to_string(value));
             }
-            rows.push(line.split('\t').map(|c| c.to_string()).collect());
+            rows.push(columns);
         }
+
         Ok(rows)
     }
 
@@ -156,4 +129,36 @@ impl SqliteDb {
 
         Ok(())
     }
+
+    fn open_connection(&self) -> CoreResult<Connection> {
+        let conn =
+            Connection::open(&self.path).map_err(|err| self.db_error("sqlite open failed", err))?;
+        conn.execute_batch("PRAGMA foreign_keys=ON;")
+            .map_err(|err| self.db_error("sqlite pragma failed", err))?;
+        Ok(conn)
+    }
+
+    fn db_error(&self, context: &str, err: rusqlite::Error) -> CoreError {
+        CoreError::new(CoreErrorCode::DbError, format!("{context}: {err}"))
+    }
+}
+
+fn value_ref_to_string(value: ValueRef<'_>) -> String {
+    match value {
+        ValueRef::Null => String::new(),
+        ValueRef::Integer(value) => value.to_string(),
+        ValueRef::Real(value) => value.to_string(),
+        ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        ValueRef::Blob(bytes) => encode_hex(bytes),
+    }
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }

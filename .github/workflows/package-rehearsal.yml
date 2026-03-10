@@ -1,0 +1,72 @@
+name: package-rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: App target to package
+        required: true
+        default: questionnaire
+        type: choice
+        options:
+          - questionnaire
+          - binder
+          - sop
+          - all
+
+jobs:
+  package:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare build output paths
+        run: |
+          # shellcheck disable=SC1091
+          source .codex/actions/_artifact_env.sh
+          echo "CODEX_BUILD_RUST_DIR=$CODEX_BUILD_RUST_DIR" >> "$GITHUB_ENV"
+          echo "CODEX_LOG_RUN_DIR=$CODEX_LOG_RUN_DIR" >> "$GITHUB_ENV"
+      - name: Run package rehearsal
+        run: |
+          if [ "${{ inputs.target }}" = "all" ]; then
+            pnpm package:all
+          else
+            pnpm "package:${{ inputs.target }}"
+          fi
+      - name: Publish workflow summary
+        run: |
+          summary_path="$CODEX_LOG_RUN_DIR/bundle-evidence/rehearsal/bundle-evidence.md"
+          if [ -f "$summary_path" ]; then
+            cat "$summary_path" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Bundle evidence markdown was not produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-rehearsal-${{ inputs.target }}
+          if-no-files-found: error
+          path: |
+            ${{ env.CODEX_LOG_RUN_DIR }}/bundle-artifacts/rehearsal/**/*.app
+            ${{ env.CODEX_LOG_RUN_DIR }}/bundle-artifacts/rehearsal/**/*.dmg
+      - name: Upload bundle evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-evidence-rehearsal-${{ inputs.target }}
+          if-no-files-found: error
+          path: |
+            ${{ env.CODEX_LOG_RUN_DIR }}/bundle-evidence/rehearsal/bundle-evidence.md
+            ${{ env.CODEX_LOG_RUN_DIR }}/bundle-evidence/rehearsal/bundle-evidence.json

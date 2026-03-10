@@ -19,6 +19,7 @@ pub struct Vault {
     pub vault_id: String,
     pub name: String,
     pub root_path: PathBuf,
+    pub created_at: String,
     pub encryption_mode: String,
     pub schema_version: i64,
 }
@@ -84,6 +85,7 @@ pub fn vault_create(vault_root: &Path, name: &str, actor: &str) -> CoreResult<Va
         vault_id,
         name: name.to_string(),
         root_path: vault_root.to_path_buf(),
+        created_at,
         encryption_mode: "none".to_string(),
         schema_version,
     })
@@ -118,6 +120,7 @@ pub fn vault_open(vault_root: &Path) -> CoreResult<Vault> {
         vault_id: r[0].clone(),
         name: r[1].clone(),
         root_path: PathBuf::from(r[2].clone()),
+        created_at: r[3].clone(),
         encryption_mode: r[4].clone(),
         schema_version,
     })
@@ -184,6 +187,46 @@ pub fn evidence_add(
         created_at,
         notes: None,
     })
+}
+
+pub fn evidence_list(db: &SqliteDb, vault_root: &Path) -> CoreResult<Vec<EvidenceItem>> {
+    let vault = load_vault_row(db, vault_root)?;
+    let rows = db.query_rows_tsv(&format!(
+        "SELECT evidence_id, vault_id, filename, relative_path, content_type, byte_size, sha256, source, tags_json, created_at, IFNULL(notes, '') FROM evidence_item WHERE vault_id={} AND deleted_at IS NULL ORDER BY created_at DESC, evidence_id ASC;",
+        db.q(&vault.vault_id)
+    ))?;
+
+    let mut evidence = Vec::with_capacity(rows.len());
+    for row in rows {
+        if row.len() < 11 {
+            return Err(CoreError::new(
+                CoreErrorCode::CorruptVault,
+                "unexpected evidence row",
+            ));
+        }
+
+        evidence.push(EvidenceItem {
+            evidence_id: row[0].clone(),
+            vault_id: row[1].clone(),
+            filename: row[2].clone(),
+            relative_path: row[3].clone(),
+            content_type: row[4].clone(),
+            byte_size: row[5].parse().map_err(|_| {
+                CoreError::new(CoreErrorCode::CorruptVault, "invalid evidence byte size")
+            })?,
+            sha256: row[6].clone(),
+            source: row[7].clone(),
+            tags: parse_string_array_json(&row[8])?,
+            created_at: row[9].clone(),
+            notes: if row[10].trim().is_empty() {
+                None
+            } else {
+                Some(row[10].clone())
+            },
+        });
+    }
+
+    Ok(evidence)
 }
 
 pub fn license_install_from_path(
@@ -378,9 +421,28 @@ fn load_vault_row(db: &SqliteDb, vault_root: &Path) -> CoreResult<Vault> {
         vault_id: r[0].clone(),
         name: r[1].clone(),
         root_path: root,
+        created_at: r[3].clone(),
         encryption_mode: r[4].clone(),
         schema_version,
     })
+}
+
+fn parse_string_array_json(value: &str) -> CoreResult<Vec<String>> {
+    let parsed = crate::util::json::JsonValue::parse(value)?;
+    let array = parsed.as_array()?;
+    let mut out = Vec::with_capacity(array.len());
+    for item in array {
+        match item {
+            crate::util::json::JsonValue::String(text) => out.push(text.clone()),
+            _ => {
+                return Err(CoreError::new(
+                    CoreErrorCode::CorruptVault,
+                    "expected string array in evidence tags",
+                ))
+            }
+        }
+    }
+    Ok(out)
 }
 
 pub(crate) fn build_event_insert_sql(

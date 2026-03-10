@@ -6,6 +6,7 @@
 
 mod csv;
 pub mod matching;
+pub mod review;
 mod xlsx;
 
 use crate::audit::canonical::CanonicalJson;
@@ -14,6 +15,7 @@ use crate::domain::errors::{CoreError, CoreErrorCode, CoreResult};
 use crate::domain::ids::Ulid;
 use crate::domain::time::DETERMINISTIC_TIMESTAMP_UTC;
 use crate::storage::db::SqliteDb;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -79,6 +81,21 @@ pub struct ColumnProfile {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct ParsedQuestionnaireRow {
+    pub row_ordinal: i64,
+    pub cells: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QuestionnaireImportRow {
+    pub import_id: String,
+    pub row_ordinal: i64,
+    pub question_text: String,
+    pub answer_text: Option<String>,
+    pub notes_text: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ColumnMapValidationIssue {
     pub code: String,
     pub message: String,
@@ -93,7 +110,7 @@ pub struct ColumnMapValidation {
 
 pub fn import_questionnaire(
     db: &SqliteDb,
-    _vault_root: &Path,
+    vault_root: &Path,
     source_path: &Path,
     actor: &str,
 ) -> CoreResult<QuestionnaireImport> {
@@ -132,6 +149,8 @@ pub fn import_questionnaire(
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "questionnaire".to_string());
     let source_sha256 = crate::audit::hasher::sha256_hex_file(source_path)?;
+    let snapshot_path = import_snapshot_path(vault_root, &import_id, &source_filename);
+    crate::util::fs::atomic_copy_to(source_path, &snapshot_path)?;
 
     let import_insert = format!(
         "INSERT INTO questionnaire_import (import_id, vault_id, source_filename, source_sha256, imported_at, format, status, column_map_json) VALUES ({}, {}, {}, {}, {}, {}, {}, NULL);",
@@ -268,6 +287,7 @@ pub fn load_import(db: &SqliteDb, import_id: &str) -> CoreResult<QuestionnaireIm
 
 pub fn set_column_map(
     db: &SqliteDb,
+    vault_root: &Path,
     import_id: &str,
     map: &ColumnMap,
     actor: &str,
@@ -282,12 +302,10 @@ pub fn set_column_map(
         ));
     }
 
-    let vault_id = db
-        .query_optional_string(&format!(
-            "SELECT vault_id FROM questionnaire_import WHERE import_id={} LIMIT 1;",
-            db.q(import_id)
-        ))?
-        .ok_or_else(|| CoreError::new(CoreErrorCode::NotFound, "questionnaire import not found"))?;
+    let import = load_import(db, import_id)?;
+    let vault_id = import.vault_id.clone();
+    let parsed_rows = load_snapshot_rows(vault_root, &import)?;
+    let mapped_rows = map_import_rows(&import.import_id, &parsed_rows, map);
 
     let map_json = map.to_canonical_json().to_string();
 
@@ -311,7 +329,11 @@ pub fn set_column_map(
         },
     )?;
 
-    let script = format!("BEGIN;\n{}\n{}\nCOMMIT;", update_sql, event_sql);
+    let rows_sql = build_import_rows_refresh_sql(db, import_id, &mapped_rows);
+    let script = format!(
+        "BEGIN;\n{}\n{}\n{}\nCOMMIT;",
+        update_sql, rows_sql, event_sql
+    );
     db.exec_batch(&script)?;
 
     load_import(db, import_id)
@@ -390,9 +412,184 @@ pub fn validate_column_map(
     Ok(ColumnMapValidation { ok, issues })
 }
 
+pub fn list_import_rows(db: &SqliteDb, import_id: &str) -> CoreResult<Vec<QuestionnaireImportRow>> {
+    let rows = db.query_rows_tsv(&format!(
+        "SELECT import_id, row_ordinal, question_text, IFNULL(answer_text, ''), IFNULL(notes_text, '') FROM questionnaire_import_row WHERE import_id={} ORDER BY row_ordinal ASC;",
+        db.q(import_id)
+    ))?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        if row.len() < 5 {
+            return Err(CoreError::new(
+                CoreErrorCode::CorruptVault,
+                "unexpected questionnaire_import_row row",
+            ));
+        }
+        out.push(QuestionnaireImportRow {
+            import_id: row[0].clone(),
+            row_ordinal: row[1]
+                .parse()
+                .map_err(|_| CoreError::new(CoreErrorCode::CorruptVault, "invalid row ordinal"))?,
+            question_text: unescape_db_text(&row[2]),
+            answer_text: if row[3].trim().is_empty() {
+                None
+            } else {
+                Some(unescape_db_text(&row[3]))
+            },
+            notes_text: if row[4].trim().is_empty() {
+                None
+            } else {
+                Some(unescape_db_text(&row[4]))
+            },
+        });
+    }
+    Ok(out)
+}
+
 fn load_vault_id(db: &SqliteDb) -> CoreResult<String> {
     db.query_optional_string("SELECT vault_id FROM vault LIMIT 1;")?
         .ok_or_else(|| CoreError::new(CoreErrorCode::CorruptVault, "missing vault row"))
+}
+
+fn import_snapshot_path(
+    vault_root: &Path,
+    import_id: &str,
+    source_filename: &str,
+) -> std::path::PathBuf {
+    vault_root
+        .join("imports")
+        .join(import_id)
+        .join(source_filename)
+}
+
+fn load_snapshot_rows(
+    vault_root: &Path,
+    import: &QuestionnaireImport,
+) -> CoreResult<Vec<ParsedQuestionnaireRow>> {
+    let snapshot_path =
+        import_snapshot_path(vault_root, &import.import_id, &import.source_filename);
+    if !snapshot_path.exists() {
+        return Err(CoreError::new(
+            CoreErrorCode::NotFound,
+            "questionnaire source snapshot not found in vault",
+        ));
+    }
+
+    match import.format.as_str() {
+        "csv" => csv::extract_rows(&snapshot_path),
+        "xlsx" => xlsx::extract_rows(&snapshot_path),
+        _ => Err(CoreError::new(
+            CoreErrorCode::UnsupportedFormat,
+            format!("unsupported questionnaire format {}", import.format),
+        )),
+    }
+}
+
+fn map_import_rows(
+    import_id: &str,
+    rows: &[ParsedQuestionnaireRow],
+    map: &ColumnMap,
+) -> Vec<QuestionnaireImportRow> {
+    rows.iter()
+        .filter_map(|row| {
+            let question_text = row
+                .cells
+                .get(&map.question)
+                .map(|value| normalize_optional_text(value))
+                .unwrap_or_default();
+            if question_text.is_empty() {
+                return None;
+            }
+
+            let answer_text = row
+                .cells
+                .get(&map.answer)
+                .map(|value| normalize_optional_text(value))
+                .filter(|value| !value.is_empty());
+            let notes_text = map
+                .notes
+                .as_ref()
+                .and_then(|column| row.cells.get(column))
+                .map(|value| normalize_optional_text(value))
+                .filter(|value| !value.is_empty());
+
+            Some(QuestionnaireImportRow {
+                import_id: import_id.to_string(),
+                row_ordinal: row.row_ordinal,
+                question_text,
+                answer_text,
+                notes_text,
+            })
+        })
+        .collect()
+}
+
+fn build_import_rows_refresh_sql(
+    db: &SqliteDb,
+    import_id: &str,
+    rows: &[QuestionnaireImportRow],
+) -> String {
+    let mut sql = format!(
+        "DELETE FROM questionnaire_import_row WHERE import_id={};\n",
+        db.q(import_id)
+    );
+
+    for row in rows {
+        sql.push_str(&format!(
+            "INSERT INTO questionnaire_import_row (import_id, row_ordinal, question_text, answer_text, notes_text) VALUES ({}, {}, {}, {}, {});\n",
+            db.q(&row.import_id),
+            row.row_ordinal,
+            db.q(&escape_db_text(&row.question_text)),
+            match &row.answer_text {
+                Some(value) => db.q(&escape_db_text(value)),
+                None => "NULL".to_string(),
+            },
+            match &row.notes_text {
+                Some(value) => db.q(&escape_db_text(value)),
+                None => "NULL".to_string(),
+            },
+        ));
+    }
+
+    sql
+}
+
+fn normalize_optional_text(value: &str) -> String {
+    value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .trim()
+        .to_string()
+}
+
+fn escape_db_text(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\t', "\\t")
+        .replace('\n', "\\n")
+}
+
+fn unescape_db_text(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(char) = chars.next() {
+        if char == '\\' {
+            match chars.next() {
+                Some('n') => output.push('\n'),
+                Some('t') => output.push('\t'),
+                Some('\\') => output.push('\\'),
+                Some(other) => {
+                    output.push('\\');
+                    output.push(other);
+                }
+                None => output.push('\\'),
+            }
+        } else {
+            output.push(char);
+        }
+    }
+    output
 }
 
 fn parse_sample_json(s: &str) -> CoreResult<Vec<String>> {

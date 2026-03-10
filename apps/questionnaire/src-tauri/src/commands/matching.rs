@@ -12,6 +12,10 @@ use tauri::State;
 pub struct MatchSuggestionDto {
     pub answer_bank_entry_id: String,
     pub score: f64,
+    pub question_canonical: String,
+    pub answer_short: String,
+    pub answer_long: String,
+    pub notes: Option<String>,
     pub normalized_question: String,
     pub normalized_answer: String,
     pub confidence_explanation: String,
@@ -22,6 +26,10 @@ impl From<MatchSuggestion> for MatchSuggestionDto {
         Self {
             answer_bank_entry_id: value.answer_bank_entry_id,
             score: value.score,
+            question_canonical: value.question_canonical,
+            answer_short: value.answer_short,
+            answer_long: value.answer_long,
+            notes: value.notes,
             normalized_question: value.normalized_question,
             normalized_answer: value.normalized_answer,
             confidence_explanation: value.confidence_explanation,

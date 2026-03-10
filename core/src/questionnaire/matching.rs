@@ -12,6 +12,10 @@ use std::collections::HashSet;
 pub struct MatchSuggestion {
     pub answer_bank_entry_id: String,
     pub score: f64,
+    pub question_canonical: String,
+    pub answer_short: String,
+    pub answer_long: String,
+    pub notes: Option<String>,
     pub normalized_question: String,
     pub normalized_answer: String,
     pub confidence_explanation: String,
@@ -139,6 +143,10 @@ impl MatchingEngine {
                 MatchSuggestion {
                     answer_bank_entry_id: entry.entry_id.clone(),
                     score,
+                    question_canonical: entry.question_canonical.clone(),
+                    answer_short: entry.answer_short.clone(),
+                    answer_long: entry.answer_long.clone(),
+                    notes: entry.notes.clone(),
                     normalized_question: q_tokens.join(" "),
                     normalized_answer: a_tokens.join(" "),
                     confidence_explanation,

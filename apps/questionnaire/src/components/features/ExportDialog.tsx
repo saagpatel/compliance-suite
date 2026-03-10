@@ -6,7 +6,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { invokeGenerateExportPack } from "../../api/tauri";
 import { useUiStore } from "../../state/uiStore";
 
-export default function ExportDialog() {
+interface ExportDialogProps {
+  importId: string;
+  disabled?: boolean;
+  disabledReason?: string | null;
+}
+
+export default function ExportDialog({
+  importId,
+  disabled = false,
+  disabledReason,
+}: ExportDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exportPath, setExportPath] = useState<string>("");
@@ -33,11 +43,11 @@ export default function ExportDialog() {
   };
 
   const handleExport = async () => {
-    if (!exportPath) return;
+    if (!exportPath || disabled) return;
 
     setLoading(true);
     try {
-      const result = await invokeGenerateExportPack(exportPath);
+      const result = await invokeGenerateExportPack(exportPath, importId);
       addToast({
         title: "Export Successful",
         description: `Export pack created with ${result.file_count} files`,
@@ -60,7 +70,9 @@ export default function ExportDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="lg">Generate Export Pack</Button>
+        <Button size="lg" disabled={disabled} title={disabledReason ?? undefined}>
+          Generate Export Pack
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -68,24 +80,31 @@ export default function ExportDialog() {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            This will create a ZIP file containing all questionnaire data, answer bank entries, and
-            evidence files.
+            This will create a ZIP file containing the current questionnaire import metadata and
+            mapped row snapshot, saved review entries, answer bank snapshot, license status, audit
+            events, and evidence files.
           </p>
 
-          <div className="flex gap-4 items-end">
+          {disabledReason && (
+            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">{disabledReason}</p>
+            </div>
+          )}
+
+          <div className="flex items-end gap-4">
             <Input
               label="Export Location"
               value={exportPath || "No path selected"}
               readOnly
               className="flex-1"
             />
-            <Button onClick={handleSelectPath} variant="outline" disabled={loading}>
+            <Button onClick={() => void handleSelectPath()} variant="outline" disabled={loading}>
               Browse...
             </Button>
           </div>
 
           <div className="flex gap-4 pt-4">
-            <Button onClick={handleExport} disabled={!exportPath || loading}>
+            <Button onClick={() => void handleExport()} disabled={!exportPath || loading || disabled}>
               {loading ? "Exporting..." : "Generate Export"}
             </Button>
             <Button variant="outline" onClick={() => setIsOpen(false)} disabled={loading}>

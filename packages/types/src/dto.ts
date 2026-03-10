@@ -49,6 +49,14 @@ export type QuestionnaireImportDto = {
   column_map?: ColumnMapDto;
 };
 
+export type QuestionnaireImportRowDto = {
+  import_id: string;
+  row_ordinal: number;
+  question_text: string;
+  answer_text?: string;
+  notes_text?: string;
+};
+
 export type ColumnMapValidationIssueDto = {
   code: string;
   message: string;
@@ -90,14 +98,16 @@ export type AnswerBankCreateInputDto = {
   source: 'manual' | 'import' | 'match' | string;
 };
 
-export type AnswerBankUpdatePatchDto = Partial<
-  Omit<AnswerBankCreateInputDto, 'evidence_links'> & {
-    evidence_links: string[];
-  }
-> & {
-  // Explicitly allow clearing notes/last_reviewed_at by passing null (mapped to None).
+export type AnswerBankUpdatePatchDto = {
+  question_canonical?: string;
+  answer_short?: string;
+  answer_long?: string;
   notes?: string | null;
+  evidence_links?: string[];
+  owner?: string;
   last_reviewed_at?: string | null;
+  tags?: string[];
+  source?: 'manual' | 'import' | 'match' | string;
 };
 
 export type AnswerBankListParamsDto = {
@@ -109,9 +119,48 @@ export type AnswerBankListParamsDto = {
 export type MatchSuggestionDto = {
   answer_bank_entry_id: string;
   score: number;           // 0.0 - 1.0
+  question_canonical: string;
+  answer_short: string;
+  answer_long: string;
+  notes?: string;
   normalized_question: string;
   normalized_answer: string;
   confidence_explanation: string;
+};
+
+export type QuestionnaireReviewStatusDto =
+  | 'draft'
+  | 'accepted_suggestion'
+  | 'edited_answer';
+
+export type QuestionnaireReviewDto = {
+  review_id: string;
+  import_id: string;
+  vault_id: string;
+  source_row_ordinal?: number;
+  question_text: string;
+  normalized_question: string;
+  answer_bank_entry_id?: string;
+  suggested_score?: number;
+  confidence_explanation?: string;
+  final_answer: string;
+  notes?: string;
+  status: QuestionnaireReviewStatusDto;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuestionnaireReviewUpsertDto = {
+  review_id?: string;
+  import_id: string;
+  source_row_ordinal?: number;
+  question_text: string;
+  answer_bank_entry_id?: string;
+  suggested_score?: number;
+  confidence_explanation?: string;
+  final_answer: string;
+  notes?: string;
+  status: QuestionnaireReviewStatusDto;
 };
 
 export type MatchingInputDto = {
@@ -136,19 +185,10 @@ export type QuestionnaireImportWithProfilesDto = QuestionnaireImportDto & {
 
 // Export pack DTOs
 export type ExportPackDto = {
-  id: string;
-  vault_id: string;
-  export_type: string;
-  file_name: string;
-  file_size_bytes: number;
-  file_hash: string;
-  manifest: {
-    export_date: string;
-    version: string;
-    entry_count: number;
-  };
-  downloaded: boolean;
-  created_at: string;
+  zip_path: string;
+  manifest_version: number;
+  file_count: number;
+  included_paths: string[];
 };
 
 export type ExportFilterDto = {

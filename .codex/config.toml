@@ -1,0 +1,45 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+model = "gpt-5-codex"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+personality = "pragmatic"
+model_reasoning_effort = "medium"
+plan_mode_reasoning_effort = "high"
+
+[agents]
+max_threads = 4
+max_depth = 1
+
+[agents.planner]
+description = "Planning lane for sequencing, acceptance criteria, and batch handoff clarity."
+
+[agents.worker]
+description = "Execution lane for bounded implementation tasks in the active milestone."
+
+[agents.qa]
+description = "Validation lane for tests, build verification, and release evidence."
+
+[agents.release]
+description = "Release lane for packaging, notarization preparation, and rollback posture."
+
+[agents.comms]
+description = "PM-friendly reporting lane for summaries, docs, and handoff artifacts."
+
+[profiles.plan-deep]
+model_reasoning_effort = "high"
+web_search = "cached"
+
+[profiles.build-steady]
+model_reasoning_effort = "medium"
+web_search = "disabled"
+
+[profiles.review-thorough]
+model_reasoning_effort = "high"
+web_search = "cached"
+
+[profiles.release-thorough]
+model_reasoning_effort = "high"
+web_search = "disabled"
+personality = "none"

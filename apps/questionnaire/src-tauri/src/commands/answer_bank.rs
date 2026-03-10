@@ -256,3 +256,34 @@ pub async fn answer_bank_list(
     let entries = ab_list_entries(&vault_path, params).map_err(|e| e.to_string())?;
     Ok(entries)
 }
+
+#[tauri::command]
+pub async fn answer_bank_search(
+    query: String,
+    limit: i64,
+    offset: i64,
+    state: State<'_, AppState>,
+) -> Result<Vec<AnswerBankEntryDto>, String> {
+    let vault_path = state
+        .get_vault_path()
+        .ok_or_else(|| "No vault open".to_string())?;
+
+    let params = AnswerBankListParamsDto { limit, offset };
+    let entries = ab_search_entries(&vault_path, &query, params).map_err(|e| e.to_string())?;
+    Ok(entries)
+}
+
+#[tauri::command]
+pub async fn answer_bank_link_evidence(
+    entry_id: String,
+    evidence_id: String,
+    state: State<'_, AppState>,
+) -> Result<AnswerBankEntryDto, String> {
+    let vault_path = state
+        .get_vault_path()
+        .ok_or_else(|| "No vault open".to_string())?;
+
+    let entry = ab_link_evidence(&vault_path, &entry_id, &evidence_id, &state.actor)
+        .map_err(|e| e.to_string())?;
+    Ok(entry)
+}

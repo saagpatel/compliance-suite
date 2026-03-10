@@ -1,5 +1,7 @@
 use super::ColumnProfile;
+use super::ParsedQuestionnaireRow;
 use crate::domain::errors::{CoreError, CoreErrorCode, CoreResult};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 const SAMPLE_LIMIT: usize = 5;
@@ -67,6 +69,46 @@ pub(crate) fn profile_columns(path: &Path) -> CoreResult<Vec<ColumnProfile>> {
     }
 
     Ok(cols)
+}
+
+pub(crate) fn extract_rows(path: &Path) -> CoreResult<Vec<ParsedQuestionnaireRow>> {
+    let s = crate::util::fs::read_to_string(path)?;
+    let mut lines = s.lines();
+    let header_line = lines.next().ok_or_else(|| {
+        CoreError::new(
+            CoreErrorCode::ImportFailed,
+            "CSV file is empty (missing header)",
+        )
+    })?;
+
+    let headers = parse_csv_line(header_line.trim_end_matches('\r'))?;
+    if headers.is_empty() {
+        return Err(CoreError::new(
+            CoreErrorCode::ImportFailed,
+            "CSV header row is empty",
+        ));
+    }
+
+    let mut out = Vec::new();
+    for (line_index, line) in lines.enumerate() {
+        let fields = parse_csv_line(line.trim_end_matches('\r'))?;
+        let mut cells = BTreeMap::new();
+        for (col_index, header) in headers.iter().enumerate() {
+            let value = fields.get(col_index).cloned().unwrap_or_default();
+            if !value.trim().is_empty() {
+                cells.insert(header.clone(), value);
+            }
+        }
+        if cells.is_empty() {
+            continue;
+        }
+        out.push(ParsedQuestionnaireRow {
+            row_ordinal: (line_index as i64) + 2,
+            cells,
+        });
+    }
+
+    Ok(out)
 }
 
 fn parse_csv_line(line: &str) -> CoreResult<Vec<String>> {

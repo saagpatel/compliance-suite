@@ -12,6 +12,7 @@ import type {
   ColumnMapValidationDto,
   ColumnMapValidationIssueDto,
   MatchSuggestionDto,
+  QuestionnaireReviewDto,
   QuestionnaireImportDto,
 } from './dto';
 
@@ -161,8 +162,28 @@ export function isMatchSuggestionDto(value: unknown): value is MatchSuggestionDt
     typeof v === 'object' &&
     typeof v.answer_bank_entry_id === 'string' &&
     typeof v.score === 'number' &&
+    typeof v.question_canonical === 'string' &&
+    typeof v.answer_short === 'string' &&
+    typeof v.answer_long === 'string' &&
     typeof v.normalized_question === 'string' &&
     typeof v.normalized_answer === 'string' &&
     typeof v.confidence_explanation === 'string'
+  );
+}
+
+export function isQuestionnaireReviewDto(value: unknown): value is QuestionnaireReviewDto {
+  const v = value as any;
+  return (
+    !!v &&
+    typeof v === 'object' &&
+    typeof v.review_id === 'string' &&
+    typeof v.import_id === 'string' &&
+    typeof v.vault_id === 'string' &&
+    typeof v.question_text === 'string' &&
+    typeof v.normalized_question === 'string' &&
+    typeof v.final_answer === 'string' &&
+    typeof v.status === 'string' &&
+    typeof v.created_at === 'string' &&
+    typeof v.updated_at === 'string'
   );
 }

@@ -54,6 +54,27 @@ impl From<questionnaire::QuestionnaireImport> for QuestionnaireImportDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuestionnaireImportRowDto {
+    pub import_id: String,
+    pub row_ordinal: i64,
+    pub question_text: String,
+    pub answer_text: Option<String>,
+    pub notes_text: Option<String>,
+}
+
+impl From<questionnaire::QuestionnaireImportRow> for QuestionnaireImportRowDto {
+    fn from(value: questionnaire::QuestionnaireImportRow) -> Self {
+        Self {
+            import_id: value.import_id,
+            row_ordinal: value.row_ordinal,
+            question_text: value.question_text,
+            answer_text: value.answer_text,
+            notes_text: value.notes_text,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnMapValidationIssueDto {
     pub code: String,
     pub message: String,
@@ -95,7 +116,7 @@ pub fn qna_set_column_map(
     let db = SqliteDb::new(&vault_db_path(root));
     db.migrate().map_err(map_core_error)?;
 
-    let out = questionnaire::set_column_map(&db, import_id, &map.into(), actor)
+    let out = questionnaire::set_column_map(&db, root, import_id, &map.into(), actor)
         .map_err(map_core_error)?;
     Ok(out.into())
 }
@@ -192,8 +213,26 @@ pub async fn save_column_mapping(
     let db = SqliteDb::new(&vault_db_path(root));
     db.migrate().map_err(map_core_error)?;
 
-    let import = questionnaire::set_column_map(&db, &import_id, &column_map.into(), &state.actor)
-        .map_err(map_core_error)?;
+    let import =
+        questionnaire::set_column_map(&db, root, &import_id, &column_map.into(), &state.actor)
+            .map_err(map_core_error)?;
 
     Ok(import.into())
+}
+
+#[tauri::command]
+pub async fn list_import_rows(
+    import_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<QuestionnaireImportRowDto>, String> {
+    let vault_path = state
+        .get_vault_path()
+        .ok_or_else(|| "No vault open".to_string())?;
+
+    let root = Path::new(&vault_path);
+    let db = SqliteDb::new(&vault_db_path(root));
+    db.migrate().map_err(map_core_error)?;
+
+    let rows = questionnaire::list_import_rows(&db, &import_id).map_err(map_core_error)?;
+    Ok(rows.into_iter().map(Into::into).collect())
 }

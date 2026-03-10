@@ -33,13 +33,23 @@ fn main() {
             commands::questionnaire::import_questionnaire,
             commands::questionnaire::get_column_profiles,
             commands::questionnaire::save_column_mapping,
+            commands::questionnaire::list_import_rows,
             // Answer bank commands
             commands::answer_bank::answer_bank_create,
             commands::answer_bank::answer_bank_update,
             commands::answer_bank::answer_bank_delete,
             commands::answer_bank::answer_bank_list,
+            commands::answer_bank::answer_bank_search,
+            commands::answer_bank::answer_bank_link_evidence,
+            // Evidence commands
+            commands::evidence::list_evidence,
+            commands::evidence::import_evidence,
             // Matching commands
             commands::matching::get_matching_suggestions,
+            // Review commands
+            commands::review::list_questionnaire_reviews,
+            commands::review::save_questionnaire_review,
+            commands::review::delete_questionnaire_review,
             // Export commands
             commands::export::generate_export_pack,
             // License commands

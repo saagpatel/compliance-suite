@@ -10,6 +10,7 @@ interface AnswerBankState {
   total: number;
   limit: number;
   offset: number;
+  searchQuery: string;
 
   // UI state
   loading: boolean;
@@ -24,6 +25,7 @@ interface AnswerBankState {
   setTotal: (total: number) => void;
   setLimit: (limit: number) => void;
   setOffset: (offset: number) => void;
+  setSearchQuery: (query: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -35,6 +37,7 @@ const initialState = {
   total: 0,
   limit: 50,
   offset: 0,
+  searchQuery: "",
   loading: false,
   error: null,
 };
@@ -56,6 +59,7 @@ export const useAnswerBankStore = create<AnswerBankState>((set) => ({
   setTotal: (total) => set({ total }),
   setLimit: (limit) => set({ limit }),
   setOffset: (offset) => set({ offset }),
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   reset: () => set(initialState),
