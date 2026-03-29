@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ed25519-dalek = { version = "2.1.1", features = ["std"] }
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 sha2 = "0.10.9"
 walkdir = "2.5.0"
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
