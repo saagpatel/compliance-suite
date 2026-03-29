@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
       - name: Upload packaged artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-rehearsal-${{ inputs.target }}
           if-no-files-found: error
@@ -63,7 +63,7 @@ jobs:
             ${{ env.CODEX_LOG_RUN_DIR }}/bundle-artifacts/rehearsal/**/*.app
             ${{ env.CODEX_LOG_RUN_DIR }}/bundle-artifacts/rehearsal/**/*.dmg
       - name: Upload bundle evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bundle-evidence-rehearsal-${{ inputs.target }}
           if-no-files-found: error
