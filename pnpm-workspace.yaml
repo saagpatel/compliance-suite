@@ -1,3 +1,10 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+overrides:
+  # version-scoped: only the vulnerable major moves; healthy 9.x/4.x copies stay
+  'minimatch@3': '^3.1.3'
+  'picomatch@2': '^2.3.2'
+  undici: '^7.24.0'
+  flatted: '^3.4.2'
+  rollup: '^4.59.0'
