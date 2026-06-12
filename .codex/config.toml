@@ -1,12 +1,7 @@
 #:schema https://developers.openai.com/codex/config-schema.json
 
-model = "gpt-5-codex"
-approval_policy = "on-request"
-sandbox_mode = "workspace-write"
-web_search = "cached"
-personality = "pragmatic"
-model_reasoning_effort = "medium"
-plan_mode_reasoning_effort = "high"
+# Runtime model, approval, sandbox, web search, personality, and reasoning
+# settings inherit from ~/.codex/config.toml or an explicit --profile layer.
 
 [agents]
 max_threads = 4
@@ -26,20 +21,3 @@ description = "Release lane for packaging, notarization preparation, and rollbac
 
 [agents.comms]
 description = "PM-friendly reporting lane for summaries, docs, and handoff artifacts."
-
-[profiles.plan-deep]
-model_reasoning_effort = "high"
-web_search = "cached"
-
-[profiles.build-steady]
-model_reasoning_effort = "medium"
-web_search = "disabled"
-
-[profiles.review-thorough]
-model_reasoning_effort = "high"
-web_search = "cached"
-
-[profiles.release-thorough]
-model_reasoning_effort = "high"
-web_search = "disabled"
-personality = "none"
