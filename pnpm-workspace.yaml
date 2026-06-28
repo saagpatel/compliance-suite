@@ -1,6 +1,8 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+allowBuilds:
+  esbuild: true
 overrides:
   # version-scoped: only the vulnerable major moves; healthy 9.x/4.x copies stay
   'minimatch@3': '^3.1.3'
